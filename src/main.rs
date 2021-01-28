@@ -4,13 +4,14 @@ extern crate rocket;
 #[macro_use]
 extern crate serde;
 
-mod loogerconfig;
-mod models;
+mod apimodels;
+mod configuration;
+
+use apimodels::RequestLogModel;
 use config::{Config, File};
-use loogerconfig::ApplicationConfig;
-use models::RequestAppendLog;
-use rocket::State;
-use rocket_contrib::json::Json;
+use configuration::ApplicationConfig;
+use rocket::{http::Status, State};
+use rocket_contrib::json::{Json, JsonValue};
 use sled::{Db, IVec};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -33,13 +34,23 @@ fn index(db: State<Db>) -> &'static str {
     "Hello, world!"
 }
 
-#[post("/", format = "json", data = "<body>")]
+#[post("/<logger>", format = "json", data = "<body>")]
 fn append_log(
-    // logger: String,
-    body: Json<RequestAppendLog>,
+    logger: String,
+    body: Json<Vec<RequestLogModel>>,
     loggers: State<LoggerMap>,
-) {
-    println!("{:?}", body.timestamp.timestamp_millis());
+) -> Status {
+    if !loggers.contains_key(&logger) {
+        return Status::NotFound;
+    }
+
+    let l = loggers.get(&logger).unwrap();
+
+    let gid = l.generate_id().unwrap();
+
+    apimodels::format_log_indetifier(gid);
+
+    Status::Ok
 }
 
 fn main() {
