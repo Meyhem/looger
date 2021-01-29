@@ -6,12 +6,13 @@ extern crate serde;
 
 mod apimodels;
 mod configuration;
+mod store;
 
 use apimodels::RequestLogModel;
 use config::{Config, File};
 use configuration::ApplicationConfig;
 use rocket::{http::Status, State};
-use rocket_contrib::json::{Json, JsonValue};
+use rocket_contrib::json::Json;
 use sled::{Db, IVec};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -44,11 +45,19 @@ fn append_log(
         return Status::NotFound;
     }
 
-    let l = loggers.get(&logger).unwrap();
+    let l = loggers.get(&logger.to_ascii_lowercase()).unwrap();
 
-    let gid = l.generate_id().unwrap();
+    let logs_to_store: Vec<store::StoredLog> = body
+        .iter()
+        .map(|log| {
+            let gid = l.generate_id().unwrap();
+            let id = store::format_log_indetifier(gid);
+            println!("{:?}", id);
+            store::new_stored_log(id, &log.level, log.scope.clone(), log.message.clone())
+        })
+        .collect();
 
-    apimodels::format_log_indetifier(gid);
+    store::store_batch(&logs_to_store, l).unwrap();
 
     Status::Ok
 }
@@ -62,7 +71,7 @@ fn main() {
     let mut loggers: LoggerMap = HashMap::new();
 
     for l in config.loggers {
-        let name = l.name;
+        let name = l.name.to_ascii_lowercase();
         let db = sled::open(&name).expect("Open db");
         loggers.insert(name, db);
     }
