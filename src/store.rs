@@ -48,11 +48,11 @@ pub fn format_log_indetifier(id: u64) -> [u8; 16] {
     let mut result = [0u8; 16];
 
     for i in 0..8 {
-        result[i] = lower[i];
+        result[i] = upper[i];
     }
 
     for i in 0..8 {
-        result[i + 8] = upper[i];
+        result[i + 8] = lower[i];
     }
 
     result

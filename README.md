@@ -1,3 +1,3 @@
 ```sh
-cargo watch -x run -i MyApp
+cargo watch -x run -i myapp
 ```

@@ -6,33 +6,39 @@ extern crate serde;
 
 mod apimodels;
 mod configuration;
+mod ext;
 mod store;
 
 use apimodels::RequestLogModel;
 use config::{Config, File};
 use configuration::ApplicationConfig;
+use ext::Rfc3339DateTime;
 use rocket::{http::Status, State};
 use rocket_contrib::json::Json;
-use sled::{Db, IVec};
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 type LoggerMap = HashMap<String, sled::Db>;
 
-#[get("/")]
-fn index(db: State<Db>) -> &'static str {
-    let key = IVec::from("views");
-    let stored = match db.get(&key).unwrap() {
-        Some(v) => v,
-        None => IVec::from(&[0u8; 4]),
-    };
+#[get("/<logger>?<offset>&<limit>&<from>&<to>", format = "json")]
+fn get_log(
+    logger: String,
+    offset: usize,
+    limit: usize,
+    from: Rfc3339DateTime,
+    to: Rfc3339DateTime,
+    loggers: State<LoggerMap>,
+) -> Result<Json<i32>, Status> {
+    println!(
+        "params off={} lim={} from={:?} to={:?}",
+        offset, limit, from, to
+    );
 
-    let parsed: u32 = u32::from_be_bytes(stored.as_ref().try_into().unwrap());
-    println!("Views: {}!", parsed);
+    if !loggers.contains_key(&logger) {
+        return Err(Status::NotFound);
+    }
+    let l = loggers.get(&logger.to_ascii_lowercase()).unwrap();
 
-    db.insert(&key, IVec::from(&(parsed + 1).to_be_bytes()))
-        .unwrap();
-    "Hello, world!"
+    Ok(Json(123))
 }
 
 #[post("/<logger>", format = "json", data = "<body>")]
@@ -52,7 +58,6 @@ fn append_log(
         .map(|log| {
             let gid = l.generate_id().unwrap();
             let id = store::format_log_indetifier(gid);
-            println!("{:?}", id);
             store::new_stored_log(id, &log.level, log.scope.clone(), log.message.clone())
         })
         .collect();
@@ -78,6 +83,6 @@ fn main() {
 
     rocket::ignite()
         .manage(loggers)
-        .mount("/", routes![index, append_log])
+        .mount("/", routes![get_log, append_log])
         .launch();
 }
