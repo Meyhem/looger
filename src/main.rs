@@ -9,7 +9,7 @@ mod configuration;
 mod formvalue;
 mod store;
 
-use apimodels::RequestLogModel;
+use apimodels::{QueryLogModel, RequestLogModel};
 use config::{Config, File};
 use configuration::ApplicationConfig;
 use formvalue::Rfc3339DateTime;
@@ -27,7 +27,7 @@ fn get_log(
     from: Rfc3339DateTime,
     to: Rfc3339DateTime,
     loggers: State<LoggerMap>,
-) -> Result<Json<i32>, Status> {
+) -> Result<Json<Vec<QueryLogModel>>, Status> {
     println!(
         "params off={} lim={} from={:?} to={:?}",
         offset, limit, from, to
@@ -38,7 +38,12 @@ fn get_log(
     }
     let l = loggers.get(&logger.to_ascii_lowercase()).unwrap();
 
-    Ok(Json(123))
+    Ok(Json(
+        store::query(l, from.into(), to.into(), offset, limit)
+            .iter()
+            .map(|l| QueryLogModel::from(l))
+            .collect(),
+    ))
 }
 
 #[post("/<logger>", format = "json", data = "<body>")]
@@ -57,7 +62,7 @@ fn append_log(
         .iter()
         .map(|log| {
             let gid = l.generate_id().unwrap();
-            let id = store::format_log_indetifier(gid);
+            let id = store::format_log_identifier(gid);
             store::new_stored_log(id, &log.level, log.scope.clone(), log.message.clone())
         })
         .collect();

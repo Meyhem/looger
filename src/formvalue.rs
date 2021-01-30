@@ -3,6 +3,12 @@ use std::error::Error;
 #[derive(Debug)]
 pub struct Rfc3339DateTime(chrono::DateTime<chrono::Utc>);
 
+impl Into<chrono::DateTime<chrono::Utc>> for Rfc3339DateTime {
+    fn into(self) -> chrono::DateTime<chrono::Utc> {
+        self.0
+    }
+}
+
 #[derive(Debug)]
 pub enum DateTimeParseError {
     DecodeError,
