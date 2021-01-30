@@ -1,10 +1,7 @@
-use std::{
-    convert::TryInto,
-    ops::{Add, Deref},
-};
-
 use chrono::prelude::*;
 use sled::{Db, IVec};
+use std::convert::TryInto;
+use std::ops::{Add, Deref};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum LogLevel {
@@ -24,17 +21,13 @@ impl From<String> for LogLevel {
             "debug" => LogLevel::Debug,
             "info" => LogLevel::Info,
             "warn" => LogLevel::Warn,
+            "warning" => LogLevel::Warn,
+            "err" => LogLevel::Error,
             "error" => LogLevel::Error,
             "fatal" => LogLevel::Fatal,
-            "unspecified" => LogLevel::Undefined,
+            "undefined" => LogLevel::Undefined,
             _ => LogLevel::Undefined,
         }
-    }
-}
-
-impl From<&String> for LogLevel {
-    fn from(s: &String) -> Self {
-        LogLevel::from(s.clone())
     }
 }
 
@@ -53,6 +46,17 @@ impl Into<String> for LogLevel {
     }
 }
 
+impl From<&String> for LogLevel {
+    fn from(s: &String) -> Self {
+        LogLevel::from(s.clone())
+    }
+}
+
+pub enum Bound {
+    Lower,
+    Upper,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StoredLog {
     pub id: [u8; 16],
@@ -61,63 +65,60 @@ pub struct StoredLog {
     pub message: String,
 }
 
-pub fn format_log_identifier(id: u64) -> [u8; 16] {
-    let lower: [u8; 8] = id.to_be_bytes();
-    let upper: [u8; 8] = Utc::now().timestamp_nanos().to_be_bytes();
+impl StoredLog {
+    pub fn format_log_identifier(id: u64) -> [u8; 16] {
+        let lower: [u8; 8] = id.to_be_bytes();
+        let upper: [u8; 8] = Utc::now().timestamp_nanos().to_be_bytes();
 
-    let mut result = [0u8; 16];
+        let mut result = [0u8; 16];
 
-    for i in 0..8 {
-        result[i] = upper[i];
+        for i in 0..8 {
+            result[i] = upper[i];
+        }
+
+        for i in 0..8 {
+            result[i + 8] = lower[i];
+        }
+
+        result
     }
 
-    for i in 0..8 {
-        result[i + 8] = lower[i];
+    pub fn parse_log_identifier(bin: &[u8]) -> Option<(DateTime<Utc>, u64)> {
+        let sized_stamp: Result<[u8; 8], _> = bin[0..8].try_into();
+        let sized_id: Result<[u8; 8], _> = bin[8..16].try_into();
+
+        if sized_stamp.is_err() || sized_id.is_err() {
+            return None;
+        }
+
+        let stamp = u64::from_be_bytes(sized_stamp.unwrap()) as i64;
+        let id = u64::from_be_bytes(sized_id.unwrap());
+
+        let datetime = Utc
+            .timestamp(0, 0)
+            .add(chrono::Duration::nanoseconds(stamp));
+
+        Some((datetime, id))
     }
 
-    result
-}
+    fn format_log_identifier_for_bound(stamp: DateTime<Utc>, bound: Bound) -> [u8; 16] {
+        let upper = stamp.timestamp_nanos().to_be_bytes();
+        let mut result = [0u8; 16];
+        for i in 0..8 {
+            result[i] = upper[i];
+        }
 
-pub fn parse_log_identifier(bin: &[u8]) -> Option<(DateTime<Utc>, u64)> {
-    let sized_stamp: Result<[u8; 8], _> = bin[0..8].try_into();
-    let sized_id: Result<[u8; 8], _> = bin[8..16].try_into();
+        let fill = match bound {
+            Bound::Lower => 0x00u8,
+            Bound::Upper => 0xFFu8,
+        };
 
-    if sized_stamp.is_err() || sized_id.is_err() {
-        return None;
+        for i in 0..8 {
+            result[i + 8] = fill;
+        }
+
+        result
     }
-
-    let stamp = u64::from_be_bytes(sized_stamp.unwrap()) as i64;
-    let id = u64::from_be_bytes(sized_id.unwrap());
-
-    let datetime = Utc
-        .timestamp(0, 0)
-        .add(chrono::Duration::nanoseconds(stamp));
-
-    Some((datetime, id))
-}
-
-pub enum Bound {
-    Lower,
-    Upper,
-}
-
-fn format_log_identifier_for_bound(stamp: DateTime<Utc>, bound: Bound) -> [u8; 16] {
-    let upper = stamp.timestamp_nanos().to_be_bytes();
-    let mut result = [0u8; 16];
-    for i in 0..8 {
-        result[i] = upper[i];
-    }
-
-    let fill = match bound {
-        Bound::Lower => 0x00u8,
-        Bound::Upper => 0xFFu8,
-    };
-
-    for i in 0..8 {
-        result[i + 8] = fill;
-    }
-
-    result
 }
 
 pub fn query(
@@ -127,15 +128,14 @@ pub fn query(
     offset: usize,
     limit: usize,
 ) -> Vec<StoredLog> {
-    let lower_bound = format_log_identifier_for_bound(from, Bound::Lower);
-    let upper_bound = format_log_identifier_for_bound(to, Bound::Upper);
+    let lower_bound = StoredLog::format_log_identifier_for_bound(from, Bound::Lower);
+    let upper_bound = StoredLog::format_log_identifier_for_bound(to, Bound::Upper);
 
     let records: Vec<StoredLog> = db
         .range(lower_bound..upper_bound)
         .skip(offset)
         .take(limit)
-        .filter(|item| item.is_ok())
-        .map(|item| item.unwrap())
+        .filter_map(|item| item.ok())
         .filter_map(|(_, binlog)| bincode::deserialize::<StoredLog>(binlog.deref()).ok())
         .collect();
 

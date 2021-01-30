@@ -1,6 +1,6 @@
 use chrono::{DateTime, TimeZone, Utc};
 
-use crate::store::{parse_log_identifier, StoredLog};
+use crate::store::StoredLog;
 
 #[derive(Debug, Deserialize)]
 pub struct RequestLogModel {
@@ -20,7 +20,7 @@ pub struct QueryLogModel {
 
 impl From<&StoredLog> for QueryLogModel {
     fn from(l: &StoredLog) -> Self {
-        let (timestamp, id) = parse_log_identifier(&l.id[..])
+        let (timestamp, id) = StoredLog::parse_log_identifier(&l.id[..])
             .or(Some((Utc.ymd(1970, 1, 1).and_hms(0, 0, 0), 0)))
             .unwrap();
 

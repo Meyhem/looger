@@ -28,11 +28,6 @@ fn get_log(
     to: Rfc3339DateTime,
     loggers: State<LoggerMap>,
 ) -> Result<Json<Vec<QueryLogModel>>, Status> {
-    println!(
-        "params off={} lim={} from={:?} to={:?}",
-        offset, limit, from, to
-    );
-
     if !loggers.contains_key(&logger) {
         return Err(Status::NotFound);
     }
@@ -62,7 +57,7 @@ fn append_log(
         .iter()
         .map(|log| {
             let gid = l.generate_id().unwrap();
-            let id = store::format_log_identifier(gid);
+            let id = store::StoredLog::format_log_identifier(gid);
             store::new_stored_log(id, &log.level, log.scope.clone(), log.message.clone())
         })
         .collect();
