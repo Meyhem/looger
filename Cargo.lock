@@ -633,7 +633,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "looger"
+name = "luger"
 version = "0.1.0"
 dependencies = [
  "bincode",

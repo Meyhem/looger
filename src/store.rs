@@ -1,3 +1,5 @@
+use std::unreachable;
+
 use chrono::prelude::*;
 use sled::{Db, IVec};
 
@@ -53,6 +55,30 @@ pub fn format_log_indetifier(id: u64) -> [u8; 16] {
 
     for i in 0..8 {
         result[i + 8] = lower[i];
+    }
+
+    result
+}
+
+pub enum Bound {
+    Lower,
+    Upper,
+}
+
+pub fn format_log_identifier_for_bound(stamp: DateTime<Utc>, compare: Bound) -> [u8; 16] {
+    let upper = stamp.timestamp_nanos().to_be_bytes();
+    let mut result = [0u8; 16];
+    for i in 0..8 {
+        result[i] = upper[i];
+    }
+
+    let fill = match compare {
+        Bound::Lower => 0x00u8,
+        Bound::Upper => 0xFFu8,
+    };
+
+    for i in 0..8 {
+        result[i + 8] = fill;
     }
 
     result

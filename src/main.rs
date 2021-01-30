@@ -6,13 +6,13 @@ extern crate serde;
 
 mod apimodels;
 mod configuration;
-mod ext;
+mod formvalue;
 mod store;
 
 use apimodels::RequestLogModel;
 use config::{Config, File};
 use configuration::ApplicationConfig;
-use ext::Rfc3339DateTime;
+use formvalue::Rfc3339DateTime;
 use rocket::{http::Status, State};
 use rocket_contrib::json::Json;
 use std::collections::HashMap;
@@ -69,7 +69,7 @@ fn append_log(
 
 fn main() {
     let mut cfg = Config::new();
-    cfg.merge(File::with_name("looger")).expect("Load config");
+    cfg.merge(File::with_name("luger")).expect("Load config");
 
     let config: ApplicationConfig = cfg.try_into().unwrap();
 
